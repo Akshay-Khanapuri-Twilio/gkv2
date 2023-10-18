@@ -4,38 +4,6 @@ const retryHandler = require(Runtime.getFunctions()['common/helpers/retry-handle
 
 /**
  * @param {object} parameters the parameters for the function
- * @param {object} parameters.context the context from calling lambda function
- * @param {string} parameters.uniqueName the unique name of the Sync Map item
- * @param {number} parameters.ttl how long (in seconds) before the Sync item expires and is deleted (optional)
- * @returns {object} A new Sync Map
- * @description the following method is used to create a Sync Map
- */
-exports.createMap = async function createMap(parameters) {
-  const { context, uniqueName, ttl } = parameters;
-
-  if (!isObject(context)) throw new Error('Invalid parameters object passed. Parameters must contain context object');
-  if (Boolean(uniqueName) && !isString(uniqueName))
-    throw new Error('Invalid parameters object passed. Parameters must contain uniqueName string value');
-  if (Boolean(ttl) && !isNumber(ttl))
-    throw new Error('Invalid parameters object passed. Parameters must contain ttl number value');
-
-  try {
-    const client = context.getTwilioClient();
-    const additionalProperties = {};
-    if (ttl) additionalProperties.ttl = ttl;
-    const mapResponse = await client.sync.v1
-      .services(context.TWILIO_FLEX_SYNC_SID)
-      .syncMaps.create({ uniqueName, ...additionalProperties })
-      .then((syncMap) => syncMap);
-
-    return { success: true, status: 200, mapResponse };
-  } catch (error) {
-    return retryHandler(error, parameters, exports.createMap);
-  }
-};
-
-/**
- * @param {object} parameters the parameters for the function
  * @param {number} parameters.attempts the number of retry attempts performed
  * @param {object} parameters.context the context from calling lambda function
  * @param {string} parameters.mapSid the SID of the Sync Map
@@ -115,8 +83,8 @@ exports.createMapItem = async function createMapItem(parameters) {
     throw new Error('Invalid parameters object passed. Parameters must contain context object');
   if (Boolean(key) && !isString(key))
     throw new Error('Invalid parameters object passed. Parameters must contain uniqueName string value');
-  if (Boolean(ttl) && !isNumber(ttl))
-    throw new Error('Invalid parameters object passed. Parameters must contain ttl number value');
+  if (Boolean(ttl) && !isString(ttl))
+    throw new Error('Invalid parameters object passed. Parameters must contain ttl integer value');
   if (Boolean(data) && !isObject(data))
     throw new Error('Invalid parameters object passed. Parameters must contain data object');
 
@@ -231,5 +199,41 @@ exports.updateDocumentData = async function updateDocumentData(parameters) {
     return { success: true, status: 200, document: documentUpdate };
   } catch (error) {
     return retryHandler(error, parameters, exports.updateDocumentData);
+  }
+};
+
+/**
+ * @param {object} parameters the parameters for the function
+ * @param {number} parameters.attempts the number of retry attempts performed
+ * @param {object} parameters.context the context from calling lambda function
+ * @param {string} parameters.taskQueueSid the friendly name of taskqueue whose config is needed
+ * @returns {object} An object containing taskqueue config
+ * @description the following method is used to retrieve
+ *   the config of the taskqueue
+ */
+exports.getTaskqueueConfig = async function getTaskqueueConfig(parameters) {
+  const { context, taskQueueSid } = parameters;
+
+  if (!isObject(context)) throw new Error('Invalid parameters object passed. Parameters must contain context object');
+
+  if (!isString(taskQueueSid))
+    throw new Error('Invalid parameters object passed. Parameters must contain the taskQueueSid string');
+
+  try {
+    const client = context.getTwilioClient();
+
+    const taskQueueConfigResponse = await client.sync.v1
+      .services(context.TWILIO_FLEX_SYNC_SID)
+      .syncMaps(context.TWILIO_TASKQUEUE_CONFIG_SYNC_MAP)
+      .syncMapItems(taskQueueSid)
+      .fetch();
+
+    return {
+      success: true,
+      status: 200,
+      taskQueueConfig: taskQueueConfigResponse.data,
+    };
+  } catch (error) {
+    return retryHandler(error, parameters, exports.getTaskqueueConfig);
   }
 };

@@ -477,3 +477,45 @@ exports.getTasks = async function getTasks(parameters) {
     return retryHandler(error, parameters, exports.getTasks);
   }
 };
+
+/**
+ * @param {object} parameters the parameters for the function
+ * @param {number} parameters.attempts the number of retry attempts performed
+ * @param {object} parameters.context the context from calling lambda function
+ * @param {string} parameters.taskQueueName the friendly name of taskqueue whose stats are needed
+ * @returns {object} An object containing average wait time of the taskqueue
+ * @description the following method is used to retrieve
+ *   the average wait time of the taskqueue
+ */
+exports.getQueuesStats = async function getQueuesStats(parameters) {
+  const { context, taskQueueName } = parameters;
+
+  if (!isObject(context)) throw new Error('Invalid parameters object passed. Parameters must contain context object');
+
+  if (!isString(taskQueueName))
+    throw new Error('Invalid parameters object passed. Parameters must contain the taskqueue friendly name string');
+
+  try {
+    const client = context.getTwilioClient();
+
+    const queues = await client.taskrouter.v1
+      .workspaces(context.TWILIO_FLEX_WORKSPACE_SID)
+      .taskQueues.list({ limit: 1000 });
+
+    const taskQueueSid = queues.find((queue) => queue.friendlyName === taskQueueName).sid;
+
+    const cumulativeStats = await client.taskrouter.v1
+      .workspaces(context.TWILIO_FLEX_WORKSPACE_SID)
+      .taskQueues(taskQueueSid)
+      .cumulativeStatistics()
+      .fetch();
+
+    return {
+      success: true,
+      status: 200,
+      cumulativeStats,
+    };
+  } catch (error) {
+    return retryHandler(error, parameters, exports.getQueuesStats);
+  }
+};
